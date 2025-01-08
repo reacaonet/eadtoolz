@@ -3,6 +3,7 @@ import { auth, storage, db } from '../../config/firebase';
 import { updateProfile, updateEmail, updatePassword } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface UserProfile {
   displayName: string;
@@ -15,7 +16,7 @@ interface UserProfile {
 }
 
 export function Profile() {
-  const user = auth.currentUser;
+  const { currentUser, userData } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
   const [isUploading, setIsUploading] = useState(false);
@@ -23,8 +24,8 @@ export function Profile() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [formData, setFormData] = useState<UserProfile>({
-    displayName: user?.displayName || '',
-    email: user?.email || '',
+    displayName: userData?.name || '',
+    email: userData?.email || '',
     bio: '',
     phone: '',
     occupation: '',
@@ -38,17 +39,21 @@ export function Profile() {
   // Carregar dados do usuário do Firestore
   useEffect(() => {
     const loadUserProfile = async () => {
-      if (!user) return;
+      if (!currentUser) return;
 
       try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
         if (userDoc.exists()) {
-          const userData = userDoc.data() as UserProfile;
+          const userData = userDoc.data();
           setFormData(prev => ({
             ...prev,
-            ...userData,
-            displayName: user.displayName || userData.displayName || '',
-            email: user.email || userData.email || ''
+            displayName: userData.name || prev.displayName,
+            email: userData.email || prev.email,
+            bio: userData.bio || '',
+            phone: userData.phone || '',
+            occupation: userData.occupation || '',
+            company: userData.company || '',
+            location: userData.location || ''
           }));
         }
       } catch (error) {
@@ -59,7 +64,7 @@ export function Profile() {
     };
 
     loadUserProfile();
-  }, [user]);
+  }, [currentUser]);
 
   const handleImageClick = () => {
     fileInputRef.current?.click();
@@ -67,14 +72,14 @@ export function Profile() {
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !user) return;
+    if (!file || !currentUser) return;
 
     try {
       setIsUploading(true);
       setError('');
 
       // Criar referência no Storage
-      const storageRef = ref(storage, `profile_photos/${user.uid}`);
+      const storageRef = ref(storage, `profile_photos/${currentUser.uid}`);
       
       // Upload da imagem
       await uploadBytes(storageRef, file);
@@ -83,9 +88,14 @@ export function Profile() {
       const photoURL = await getDownloadURL(storageRef);
       
       // Atualizar perfil do usuário
-      await updateProfile(user, {
+      await updateProfile(currentUser, {
         photoURL: photoURL
       });
+
+      // Atualizar no Firestore
+      await setDoc(doc(db, 'users', currentUser.uid), {
+        photoURL: photoURL
+      }, { merge: true });
 
       setSuccess('Foto atualizada com sucesso!');
     } catch (error: any) {
@@ -109,21 +119,21 @@ export function Profile() {
     setSuccess('');
 
     try {
-      if (!user) throw new Error('Usuário não encontrado');
+      if (!currentUser) throw new Error('Usuário não encontrado');
 
       // Atualizar perfil básico no Firebase Auth
-      await updateProfile(user, {
+      await updateProfile(currentUser, {
         displayName: formData.displayName,
       });
 
       // Atualizar email se foi alterado
-      if (formData.email !== user.email) {
-        await updateEmail(user, formData.email);
+      if (formData.email !== currentUser.email) {
+        await updateEmail(currentUser, formData.email);
       }
 
       // Salvar dados adicionais no Firestore
-      await setDoc(doc(db, 'users', user.uid), {
-        displayName: formData.displayName,
+      await setDoc(doc(db, 'users', currentUser.uid), {
+        name: formData.displayName,
         email: formData.email,
         bio: formData.bio,
         phone: formData.phone,
@@ -131,7 +141,7 @@ export function Profile() {
         company: formData.company,
         location: formData.location,
         updatedAt: new Date().toISOString()
-      });
+      }, { merge: true });
 
       setSuccess('Perfil atualizado com sucesso!');
       setIsEditing(false);
@@ -167,7 +177,7 @@ export function Profile() {
                 className="relative cursor-pointer group"
               >
                 <img
-                  src={user?.photoURL || "https://placehold.co/120x120?text=👤"}
+                  src={currentUser?.photoURL || "https://placehold.co/120x120?text=👤"}
                   alt="Profile"
                   className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg transition-opacity group-hover:opacity-75"
                 />
@@ -191,7 +201,7 @@ export function Profile() {
               </div>
             </div>
             <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gray-900">{user?.displayName || 'Usuário'}</h1>
+              <h1 className="text-2xl font-bold text-gray-900">{formData.displayName || 'Usuário'}</h1>
               <p className="text-gray-600">{formData.occupation}</p>
               <p className="text-gray-500 text-sm">{formData.location}</p>
             </div>
@@ -225,16 +235,6 @@ export function Profile() {
             }`}
           >
             Segurança
-          </button>
-          <button
-            onClick={() => setActiveTab('notifications')}
-            className={`px-6 py-3 font-medium ${
-              activeTab === 'notifications'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Notificações
           </button>
         </div>
 
@@ -347,13 +347,13 @@ export function Profile() {
               const confirmPassword = (form.elements.namedItem('confirmPassword') as HTMLInputElement).value;
 
               try {
-                if (!user) throw new Error('Usuário não encontrado');
+                if (!currentUser) throw new Error('Usuário não encontrado');
 
                 if (newPassword !== confirmPassword) {
                   throw new Error('As senhas não coincidem');
                 }
 
-                await updatePassword(user, newPassword);
+                await updatePassword(currentUser, newPassword);
                 setSuccess('Senha atualizada com sucesso!');
                 form.reset();
               } catch (error: any) {
@@ -398,43 +398,6 @@ export function Profile() {
               </button>
             </div>
           </form>
-          )}
-
-          {activeTab === 'notifications' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between py-4 border-b">
-                <div>
-                  <h3 className="font-medium text-gray-900">Notificações por Email</h3>
-                  <p className="text-gray-500 text-sm">Receba atualizações sobre seus cursos</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" defaultChecked />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
-              </div>
-
-              <div className="flex items-center justify-between py-4 border-b">
-                <div>
-                  <h3 className="font-medium text-gray-900">Notificações no Site</h3>
-                  <p className="text-gray-500 text-sm">Receba notificações em tempo real</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" defaultChecked />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
-              </div>
-
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <h3 className="font-medium text-gray-900">Newsletter</h3>
-                  <p className="text-gray-500 text-sm">Receba novidades e promoções</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
-              </div>
-            </div>
           )}
         </div>
       </div>

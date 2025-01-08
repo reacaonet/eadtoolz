@@ -18,3 +18,23 @@ body {
   min-width: 320px;
   min-height: 100vh;
 }
+
+html, body {
+  @apply h-full bg-gray-50;
+}
+
+#root {
+  @apply h-full;
+}
+
+.sidebar-link {
+  @apply flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors;
+}
+
+.sidebar-link.active {
+  @apply bg-blue-50 text-blue-600;
+}
+
+.sidebar-icon {
+  @apply w-5 h-5;
+}

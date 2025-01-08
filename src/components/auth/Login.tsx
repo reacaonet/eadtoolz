@@ -1,14 +1,13 @@
 import { useState } from 'react';
-import { auth } from '../../config/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 export function Login() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -32,29 +31,31 @@ export function Login() {
     try {
       if (isLogin) {
         // Login
-        await signInWithEmailAndPassword(auth, formData.email, formData.password);
-        navigate('/dashboard');
-      } else {
-        // Registro
-        if (formData.password !== formData.confirmPassword) {
-          throw new Error('As senhas não coincidem');
+        const userData = await login(formData.email, formData.password);
+        console.log('Login successful, user data:', userData); // Debug
+        
+        // Redirecionar com base no papel do usuário
+        switch (userData.role) {
+          case 'admin':
+            console.log('Redirecting admin to /admin'); // Debug
+            navigate('/admin');
+            break;
+          case 'teacher':
+            console.log('Redirecting teacher to /teacher/dashboard'); // Debug
+            navigate('/teacher/dashboard');
+            break;
+          case 'student':
+            console.log('Redirecting student to /student/dashboard'); // Debug
+            navigate('/student/dashboard');
+            break;
+          default:
+            console.log('Unknown role, redirecting to /'); // Debug
+            navigate('/');
         }
-
-        const userCredential = await createUserWithEmailAndPassword(
-          auth,
-          formData.email,
-          formData.password
-        );
-
-        // Atualizar o nome do usuário
-        await updateProfile(userCredential.user, {
-          displayName: formData.name
-        });
-
-        navigate('/dashboard');
       }
     } catch (error: any) {
-      setError(error.message);
+      console.error('Erro no login:', error);
+      setError('Falha no login. Verifique suas credenciais.');
     } finally {
       setLoading(false);
     }

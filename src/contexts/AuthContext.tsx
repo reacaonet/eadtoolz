@@ -7,13 +7,22 @@ import {
   User,
   UserCredential,
 } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { auth, db } from '../config/firebase';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+
+interface UserData {
+  name: string;
+  email: string;
+  role: 'student' | 'teacher' | 'admin';
+}
 
 interface AuthContextType {
   currentUser: User | null;
-  signUp: (email: string, password: string) => Promise<UserCredential>;
-  login: (email: string, password: string) => Promise<UserCredential>;
-  logout: () => Promise<void>;
+  userData: UserData | null;
+  signUp: (email: string, password: string, name: string, role: 'student' | 'teacher') => Promise<void>;
+  login: (email: string, password: string) => Promise<UserData>;
+  signOut: () => Promise<void>;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -28,23 +37,86 @@ export function useAuth() {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  function signUp(email: string, password: string) {
-    return createUserWithEmailAndPassword(auth, email, password);
+  async function signUp(email: string, password: string, name: string, role: 'student' | 'teacher') {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      const userData = {
+        name,
+        email,
+        role,
+        createdAt: new Date().toISOString(),
+      };
+
+      // Salvar dados adicionais do usuário no Firestore
+      await setDoc(doc(db, 'users', user.uid), userData);
+      
+      setUserData(userData);
+      return userData;
+    } catch (error) {
+      console.error('Erro no cadastro:', error);
+      throw error;
+    }
   }
 
-  function login(email: string, password: string) {
-    return signInWithEmailAndPassword(auth, email, password);
+  async function login(email: string, password: string): Promise<UserData> {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+      
+      if (!userDoc.exists()) {
+        throw new Error('Usuário não encontrado no Firestore');
+      }
+
+      const userData = userDoc.data() as UserData;
+      console.log('User Data from Firestore:', userData); // Debug
+      setUserData(userData);
+      return userData;
+    } catch (error) {
+      console.error('Erro no login:', error);
+      throw error;
+    }
   }
 
-  function logout() {
-    return signOut(auth);
+  async function handleSignOut() {
+    try {
+      await signOut(auth);
+      setUserData(null);
+      setCurrentUser(null);
+    } catch (error) {
+      console.error('Erro no logout:', error);
+      throw error;
+    }
   }
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log('Auth State Changed:', user); // Debug
       setCurrentUser(user);
+      
+      if (user) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data() as UserData;
+            console.log('User Data on Auth Change:', userData); // Debug
+            setUserData(userData);
+          } else {
+            console.error('Dados do usuário não encontrados no Firestore');
+            setUserData(null);
+          }
+        } catch (error) {
+          console.error('Erro ao carregar dados do usuário:', error);
+          setUserData(null);
+        }
+      } else {
+        setUserData(null);
+      }
+      
       setLoading(false);
     });
 
@@ -53,9 +125,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = {
     currentUser,
+    userData,
     signUp,
     login,
-    logout,
+    signOut: handleSignOut,
+    loading
   };
 
   return (
