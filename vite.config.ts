@@ -1,10 +1,16 @@
+<<<<<<< HEAD
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+=======
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+>>>>>>> 36b2f35 (feat: implementação do perfil de usuário com upload de foto)
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+<<<<<<< HEAD
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -26,3 +32,9 @@ export default defineConfig({
     sourcemap: true,
   },
 })
+=======
+  optimizeDeps: {
+    exclude: ['lucide-react'],
+  },
+});
+>>>>>>> 36b2f35 (feat: implementação do perfil de usuário com upload de foto)

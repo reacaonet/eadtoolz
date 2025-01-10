@@ -1,4 +1,5 @@
 export interface Course {
+<<<<<<< HEAD
   id?: string;
   title: string;
   description: string;
@@ -36,3 +37,21 @@ export interface Lesson {
   order: number;
   isPreview?: boolean;
 }
+=======
+  id: string;
+  title: string;
+  description: string;
+  coverImage: string;
+  duration: string;
+  level: 'beginner' | 'intermediate' | 'advanced';
+  instructor: {
+    id: string;
+    name: string;
+    avatar: string;
+  };
+  category: string;
+  videoUrl?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+>>>>>>> 36b2f35 (feat: implementação do perfil de usuário com upload de foto)

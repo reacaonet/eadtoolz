@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 export type UserRole = 'admin' | 'teacher' | 'student';
 
 export interface User {
@@ -35,4 +36,16 @@ export interface Teacher extends User {
 export interface Admin extends User {
   role: 'admin';
   permissions: string[];
+=======
+export type UserRole = 'student' | 'teacher' | 'admin';
+
+export interface UserData {
+  uid: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  photoURL?: string;
+  createdAt: string;
+  updatedAt: string;
+>>>>>>> 36b2f35 (feat: implementação do perfil de usuário com upload de foto)
 }
